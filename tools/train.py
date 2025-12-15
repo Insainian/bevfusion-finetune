@@ -67,6 +67,19 @@ def main():
 
     model = build_model(cfg.model)
     model.init_weights()
+    # Optionally freeze encoders (for fusion-only fine-tuning)
+    if cfg.get("freeze_encoders", False):
+        if hasattr(model, "encoders"):
+            if hasattr(model.encoders, "camera"):
+                for p in model.encoders.camera.parameters():
+                    p.requires_grad = False
+            if hasattr(model.encoders, "lidar"):
+                for p in model.encoders.lidar.parameters():
+                    p.requires_grad = False
+            logger.info("freeze_encoders=True -> camera & lidar encoders frozen.")
+        else:
+            logger.warning("freeze_encoders=True set, but model has no .encoders attribute.")
+
     if cfg.get("sync_bn", None):
         if not isinstance(cfg["sync_bn"], dict):
             cfg["sync_bn"] = dict(exclude=[])
