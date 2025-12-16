@@ -1,223 +1,391 @@
-# BEVFusion
+# BEVFusion Fine-Tuning on nuScenes (CMPE 249 Project)
 
-### [website](http://bevfusion.mit.edu/) | [paper](https://arxiv.org/abs/2205.13542) | [video](https://www.youtube.com/watch?v=uCAka90si9E)
+This repository contains our course project code for fine-tuning BEVFusion on the nuScenes dataset (mini or full) under different training configurations:
 
-![demo](assets/demo.gif)
+- Baseline pre-trained BEVFusion evaluation
 
-## News
+- Full-model fine-tuning
 
-- **(2024/5)** BEVFusion is integrated into NVIDIA [DeepStream](https://developer.nvidia.com/blog/nvidia-deepstream-7-0-milestone-release-for-next-gen-vision-ai-development/) for sensor fusion.
-- **(2023/5)** NVIDIA provides a [TensorRT deployment solution](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/tree/master/CUDA-BEVFusion) of BEVFusion, achieving 25 FPS on Jetson Orin.
-- **(2023/4)** BEVFusion ranks first on [Argoverse](https://eval.ai/web/challenges/challenge-page/1710/overview) 3D object detection leaderboard among all solutions.
-- **(2023/1)** BEVFusion is integrated into [MMDetection3D](https://github.com/open-mmlab/mmdetection3d/tree/main/projects/BEVFusion).
-- **(2023/1)** BEVFusion is accepted to ICRA 2023!
-- **(2022/8)** BEVFusion ranks first on [Waymo](https://waymo.com/open/challenges/2020/3d-detection/) 3D object detection leaderboard among all solutions.
-- **(2022/6)** BEVFusion ranks first on [nuScenes](https://nuscenes.org/tracking?externalData=all&mapData=all&modalities=Any) 3D object detection leaderboard among all solutions.
-- **(2022/6)** BEVFusion ranks first on [nuScenes](https://nuscenes.org/object-detection?externalData=all&mapData=all&modalities=Any) 3D object detection leaderboard among all solutions.
+- Data Augmentation 
 
-## Abstract
+- Fusion-only fine-tuning (frozen encoders)
 
-Multi-sensor fusion is essential for an accurate and reliable autonomous driving system. Recent approaches are based on point-level fusion: augmenting the LiDAR point cloud with camera features. However, the camera-to-LiDAR projection throws away the semantic density of camera features, hindering the effectiveness of such methods, especially for semantic-oriented tasks (such as 3D scene segmentation). In this paper, we break this deeply-rooted convention with BEVFusion, an efficient and generic multi-task multi-sensor fusion framework. It unifies multi-modal features in the shared bird's-eye view (BEV) representation space, which nicely preserves both geometric and semantic information. To achieve this, we diagnose and lift key efficiency bottlenecks in the view transformation with optimized BEV pooling, reducing latency by more than **40x**. BEVFusion is fundamentally task-agnostic and seamlessly supports different 3D perception tasks with almost no architectural changes. It establishes the new state of the art on the nuScenes benchmark, achieving **1.3%** higher mAP and NDS on 3D object detection and **13.6%** higher mIoU on BEV map segmentation, with **1.9x** lower computation cost.
+- Two-stage LiDAR-first -> Camera+LiDAR fusion
 
-## Results
+The code is based on the MIT Han Lab BEVFusion implementation and adds a few light modifications and scripts to make it easier to run experiments on an HPC cluster or a single workstation.
 
-### 3D Object Detection (on Waymo test)
+## Repository Layout
 
-|   Model   | mAP-L1 | mAPH-L1  | mAP-L2  | mAPH-L2  |
-| :-------: | :------: | :--: | :--: | :--: |
-| [BEVFusion](https://waymo.com/open/challenges/entry/?challenge=DETECTION_3D&challengeId=DETECTION_3D&emailId=f58eed96-8bb3&timestamp=1658347965704580) |    82.72   |  81.35  | 77.65  |  76.33 |
-| [BEVFusion-TTA](https://waymo.com/open/challenges/entry/?challenge=DETECTION_3D&challengeId=DETECTION_3D&emailId=94ddc185-d2ce&timestamp=1663562767759105) | 86.04    |  84.76 | 81.22  |  79.97 |
+Key directories and files:
 
-Here, BEVFusion only uses a single model without any test time augmentation. BEVFusion-TTA uses single model with test-time augmentation and no model ensembling is applied. 
+- configs/ - model & dataset configs (from BEVFusion, with our minor tweaks)
 
-### 3D Object Detection (on nuScenes test)
+- mmdet3d/ - BEVFusion’s fork of MMDetection3D (includes spconv ops)
 
-|   Model   | Modality | mAP  | NDS  |
-| :-------: | :------: | :--: | :--: |
-| BEVFusion-e |   C+L    | 74.99 | 76.09 |
-| BEVFusion |   C+L    | 70.23 | 72.88 |
-| BEVFusion-base* |   C+L    | 71.72 | 73.83 |
+- tools/
 
-*: We scaled up MACs of the model to match the computation cost of concurrent work.
+  - train.py - main training entry point
 
-### 3D Object Detection (on nuScenes validation)
+  - test.py - evaluation script
 
-|        Model         | Modality | mAP  | NDS  | Checkpoint  |
-| :------------------: | :------: | :--: | :--: | :---------: |
-|    [BEVFusion](configs/nuscenes/det/transfusion/secfpn/camera+lidar/swint_v0p075/convfuser.yaml)       |   C+L    | 68.52 | 71.38 | [Link](https://www.dropbox.com/scl/fi/ulaz9z4wdwtypjhx7xdi3/bevfusion-det.pth?rlkey=ovusfi2rchjub5oafogou255v&dl=1) |
-| [Camera-Only Baseline](configs/nuscenes/det/centerhead/lssfpn/camera/256x704/swint/default.yaml) |    C     | 35.56 | 41.21 | [Link](https://www.dropbox.com/scl/fi/pxfaz1nc07qa2twlatzkz/camera-only-det.pth?rlkey=f5do81fawie0ssbg9uhrm6p30&dl=1) |
-| [LiDAR-Only Baseline](configs/nuscenes/det/transfusion/secfpn/lidar/voxelnet_0p075.yaml)  |    L     | 64.68 | 69.28 | [Link](https://www.dropbox.com/scl/fi/b1zvgrg9ucmv0wtx6pari/lidar-only-det.pth?rlkey=fw73bmdh57jxtudw6osloywah&dl=1) |
+  - create_data.py - nuScenes preprocessing / info file generation
 
-*Note*: The camera-only object detection baseline is a variant of BEVDet-Tiny with a much heavier view transformer and other differences in hyperparameters. Thanks to our [efficient BEV pooling](mmdet3d/ops/bev_pool) operator, this model runs fast and has higher mAP than BEVDet-Tiny under the same input resolution. Please refer to [BEVDet repo](https://github.com/HuangJunjie2017/BEVDet) for the original BEVDet-Tiny implementation. The LiDAR-only baseline is TransFusion-L.
+- data/ - expected location for nuScenes data (not tracked by git)
 
-### BEV Map Segmentation (on nuScenes validation)
+- pretrained/ - pre-trained model weights (Swin, BEVFusion, etc.)
 
-|        Model         | Modality | mIoU | Checkpoint  |
-| :------------------: | :------: | :--: | :---------: |
-| [BEVFusion](configs/nuscenes/seg/fusion-bev256d2-lss.yaml)       |   C+L    | 62.95 | [Link](https://www.dropbox.com/scl/fi/8lgd1hkod2a15mwry0fvd/bevfusion-seg.pth?rlkey=2tmgw7mcrlwy9qoqeui63tay9&dl=1) |
-| [Camera-Only Baseline](configs/nuscenes/seg/camera-bev256d2.yaml) |    C     | 57.09 | [Link](https://www.dropbox.com/scl/fi/cwpcu80n0shmwraegi6z4/camera-only-seg.pth?rlkey=l60kdaz19fq3gwocsjk09e60z&dl=1) |
-| [LiDAR-Only Baseline](configs/nuscenes/seg/lidar-centerpoint-bev128.yaml)  |    L     | 48.56 | [Link](https://www.dropbox.com/scl/fi/mi3w6uxvytdre9i42r9k7/lidar-only-seg.pth?rlkey=rve7hx80u3en1gfoi7tjucl72&dl=1) |
+- runs/ - model checkpoints & internal run directories (created at runtime)
 
-## Usage
+- setup.py - builds mmdet3d and custom CUDA / spconv ops
 
-### Prerequisites
+- environment.yaml - conda environment spec
 
-The code is built with following libraries:
+## Requirements
 
-- Python >= 3.8, \<3.9
-- OpenMPI = 4.0.4 and mpi4py = 3.0.3 (Needed for torchpack)
-- Pillow = 8.4.0 (see [here](https://github.com/mit-han-lab/bevfusion/issues/63))
-- [PyTorch](https://github.com/pytorch/pytorch) >= 1.9, \<= 1.10.2
-- [tqdm](https://github.com/tqdm/tqdm)
-- [torchpack](https://github.com/mit-han-lab/torchpack)
-- [mmcv](https://github.com/open-mmlab/mmcv) = 1.4.0
-- [mmdetection](http://github.com/open-mmlab/mmdetection) = 2.20.0
-- [nuscenes-dev-kit](https://github.com/nutonomy/nuscenes-devkit)
+### Software
 
-After installing these dependencies, please run this command to install the codebase:
+- Python 3.8
+- CUDA 11.x (we used 11.3) and a compatible NVIDIA driver
+- Conda (Anaconda / Miniconda)
+- Git
+
+### Python / PyTorch Stack
+
+The exact versions you use may differ, but our working setup used:
+
+- pytorch==1.10.2 (CUDA 11.3 build)
+
+- torchvision==0.11.3
+
+- mmcv==1.4.0
+
+- mmdet and mmdet3d provided via this repo & python setup.py develop
+
+- numpy==1.23.x
+
+- torchpack, numba, pyyaml, yapf, etc.
+
+## Environment Setup
+
+### Clone the Repo
 
 ```bash
+git clone <this-repo-url>
+cd bevfusion-finetune
+```
+
+### Create Conda Environment
+
+```bash
+conda env create -f environment.yaml
+conda activate bevfusion
+```
+
+Or if you want to install packages yourself:
+
+```bash
+conda create -n bevfusion python=3.8 -y
+conda activate bevfusion
+```
+
+Install PyTorch (example for CUDA 11.3):
+
+```bash
+conda install pytorch=1.10.2 torchvision=0.11.3 cudatoolkit=11.3 \
+  -c pytorch -c nvidia -y
+```
+
+Then install basic Python dependencies (you can extend this list):
+
+```bash
+pip install torchpack numba pyyaml yapf numpy==1.23.5
+# mmcv etc. can be pulled in via setup.py
+```
+
+To avoid interference from ~/.local packages, you can set:
+
+```bash
+export PYTHONNOUSERSITE=1
+```
+
+### Build mmdet3d and Custom Ops
+
+From the repo root:
+
+```bash
+# Make sure no conflicting mmdet3d is installed
+pip uninstall -y mmdet3d || true
+
+# Make sure now previously built files exist
+python setup.py clean
+rm -rf build mmdet3d.egg-info
+
 python setup.py develop
 ```
 
-We also provide a [Dockerfile](docker/Dockerfile) to ease environment setup. To get started with docker, please make sure that `nvidia-docker` is installed on your machine. After that, please execute the following command to build the docker image:
+This will compile and install the forked mmdet3d (including spconv CUDA ops) into the bevfusion environment.
+
+## Dataset Setup
+
+### Download nuScenes
+
+Follow the official nuScenes instructions to download the dataset (mini or full) and place it under `data/`:
 
 ```bash
-cd docker && docker build . -t bevfusion
-```
+<REPO_ROOT>/
+  data/
+    nuscenes/
+      samples/
+      sweeps/
+      maps/
+      v1.0-mini/ or v1.0-trainval/
+``` 
+### Create nuScenes Info Files
 
-We can then run the docker with the following command:
-
-```bash
-nvidia-docker run -it -v `pwd`/../data:/dataset --shm-size 16g bevfusion /bin/bash
-```
-
-We recommend the users to run data preparation (instructions are available in the next section) outside the docker if possible. Note that the dataset directory should be an absolute path. Within the docker, please run the following command to clone our repo and install custom CUDA extensions:
-
-```bash
-cd home && git clone https://github.com/mit-han-lab/bevfusion && cd bevfusion
-python setup.py develop
-```
-
-You can then create a symbolic link `data` to the `/dataset` directory in the docker.
-
-### Data Preparation
-
-#### nuScenes
-
-Please follow the instructions from [here](https://github.com/open-mmlab/mmdetection3d/blob/master/docs/en/datasets/nuscenes_det.md) to download and preprocess the nuScenes dataset. Please remember to download both detection dataset and the map extension (for BEV map segmentation). After data preparation, you will be able to see the following directory structure (as is indicated in mmdetection3d):
-
-```
-mmdetection3d
-├── mmdet3d
-├── tools
-├── configs
-├── data
-│   ├── nuscenes
-│   │   ├── maps
-│   │   ├── samples
-│   │   ├── sweeps
-│   │   ├── v1.0-test
-|   |   ├── v1.0-trainval
-│   │   ├── nuscenes_database
-│   │   ├── nuscenes_infos_train.pkl
-│   │   ├── nuscenes_infos_val.pkl
-│   │   ├── nuscenes_infos_test.pkl
-│   │   ├── nuscenes_dbinfos_train.pkl
-
-```
-
-### Evaluation
-
-We also provide instructions for evaluating our pretrained models. Please download the checkpoints using the following script: 
+From the repo root:
 
 ```bash
-./tools/download_pretrained.sh
+conda activate bevfusion
+
+python tools/create_data.py nuscenes \
+  --root-path ./data/nuscenes \
+  --out-dir ./data/nuscenes \
+  --extra-tag nuscenes \
+  --version v1.0-mini   # or v1.0-trainval for full
 ```
 
-Then, you will be able to run:
+This generates the `nuscenes_infos_*.pkl` files that the dataset class uses.
+
+## Pretrained Models
+
+### Download Pretrained Weights
+
+BEVFusion uses:
+
+- Swin-T backbone pretrained on nuImages (for camera branch)
+
+- BEVFusion detection checkpoint on nuScenes (camera+LiDAR)
+
+Typical filenames (place them under pretrained/):
+
+- pretrained/swint-nuimages-pretrained.pth
+
+- pretrained/bevfusion-det.pth
+
+You can obtain them by running:
 
 ```bash
-torchpack dist-run -np [number of gpus] python tools/test.py [config file path] pretrained/[checkpoint name].pth --eval [evaluation type]
+wget -O bevfusion-det.pth https://www.dropbox.com/scl/fi/ulaz9z4wdwtypjhx7xdi3/bevfusion-det.pth?rlkey=ovusfi2rchjub5oafogou255v 
+wget -O swint-nuimages-pretrained.pth https://www.dropbox.com/scl/fi/f3e67wgn2omoftah4ceri/swint-nuimages-pretrained.pth?rlkey=k9kafympye80b3b1quutti4yq
 ```
 
-For example, if you want to evaluate the detection variant of BEVFusion, you can try:
+## Running Experiments
+
+### General Command Structure
 
 ```bash
-torchpack dist-run -np 8 python tools/test.py configs/nuscenes/det/transfusion/secfpn/camera+lidar/swint_v0p075/convfuser.yaml pretrained/bevfusion-det.pth --eval bbox
+# Base configs
+BASE_CONFIG=configs/nuscenes/det/transfusion/secfpn/camera+lidar/swint_v0p075/convfuser.yaml
+LIDAR_CONFIG=configs/nuscenes/det/transfusion/secfpn/lidar/voxelnet_0p075.yaml
+
+# Logging root directory
+LOGROOT=./logs
+mkdir -p "$LOGROOT"
+
+export PYTHONNOUSERSITE=1
 ```
 
-While for the segmentation variant of BEVFusion, this command will be helpful:
+For logging every run, we use this consistent pattern:
 
 ```bash
-torchpack dist-run -np 8 python tools/test.py configs/nuscenes/seg/fusion-bev256d2-lss.yaml pretrained/bevfusion-seg.pth --eval map
+EXPNAME=<experiment_name>
+RUN_ID=$(date +%Y%m%d_%H%M%S)
+LOGDIR=$LOGROOT/${EXPNAME}_${RUN_ID}
+mkdir -p "$LOGDIR"
+
+# Example: training
+CUDA_VISIBLE_DEVICES=0 \
+python tools/train.py ... \
+  2>&1 | tee "$LOGDIR/train.out"
+
+# Example: evaluation
+CUDA_VISIBLE_DEVICES=0 \
+python tools/test.py ... \
+  2>&1 | tee "$LOGDIR/test.out"
 ```
 
-### Training
+All console output goes to train.out / test.out for later analysis.
 
-We provide instructions to reproduce our results on nuScenes.
+### Baseline Evaluation
 
-For example, if you want to train the camera-only variant for object detection, please run:
+Evaluate the official BEVFusion detector on nuScenes:
 
 ```bash
-torchpack dist-run -np 8 python tools/train.py configs/nuscenes/det/centerhead/lssfpn/camera/256x704/swint/default.yaml --model.encoders.camera.backbone.init_cfg.checkpoint pretrained/swint-nuimages-pretrained.pth
+EXPNAME=baseline_eval
+RUN_ID=$(date +%Y%m%d_%H%M%S)
+LOGDIR=$LOGROOT/${EXPNAME}_${RUN_ID}
+mkdir -p "$LOGDIR"
+
+CUDA_VISIBLE_DEVICES=0 \
+python tools/test.py \
+  $BASE_CONFIG \
+  pretrained/bevfusion-det.pth \
+  --eval bbox \
+  --launcher none \
+  2>&1 | tee "$LOGDIR/test.out"
 ```
 
-For camera-only BEV segmentation model, please run:
+--launcher none ensures single-GPU eval without distributed initialization.
+At the end of test.out, you’ll see metrics like mAP and NDS on nuScenes.
+
+### Full-Model Fine-Tuning
+
+Fine-tune the full BEVFusion model (camera + LiDAR encoders + fusion + head):
 
 ```bash
-torchpack dist-run -np 8 python tools/train.py configs/nuscenes/seg/camera-bev256d2.yaml --model.encoders.camera.backbone.init_cfg.checkpoint pretrained/swint-nuimages-pretrained.pth
+EXPNAME=finetune_full
+RUN_ID=$(date +%Y%m%d_%H%M%S)
+LOGDIR=$LOGROOT/${EXPNAME}_${RUN_ID}
+mkdir -p "$LOGDIR"
+
+SAMPLES_PER_GPU=2    # adjust based on GPU memory
+WORKERS_PER_GPU=4
+
+CUDA_VISIBLE_DEVICES=0 \
+python tools/train.py $BASE_CONFIG \
+  --data.samples_per_gpu=$SAMPLES_PER_GPU \
+  --data.workers_per_gpu=$WORKERS_PER_GPU \
+  --optimizer.lr=1e-4 \
+  --runner.max_epochs=2 \
+  --model.encoders.camera.backbone.init_cfg.checkpoint=pretrained/swint-nuimages-pretrained.pth \
+  --load_from=pretrained/bevfusion-det.pth \
+  2>&1 | tee "$LOGDIR/train.out"
 ```
 
-For LiDAR-only detector, please run:
+- --runner.max_epochs=2 is a short schedule for experimentation. You can increase this if you have more compute time.
+- --load_from initializes from the official BEVFusion checkpoint.
+
+To evaluate the fine-tuned checkpoint (e.g., epoch_2.pth):
 
 ```bash
-torchpack dist-run -np 8 python tools/train.py configs/nuscenes/det/transfusion/secfpn/lidar/voxelnet_0p075.yaml
-```
+EXPNAME=finetune_full_eval
+RUN_ID=$(date +%Y%m%d_%H%M%S)
+LOGDIR=$LOGROOT/${EXPNAME}_${RUN_ID}
+mkdir -p "$LOGDIR"
 
-For LiDAR-only BEV segmentation model, please run:
+CKPT=<path_to_epoch_2_or_latest.pth>
+
+CUDA_VISIBLE_DEVICES=0 \
+python tools/test.py \
+  $BASE_CONFIG \
+  $CKPT \
+  --eval bbox \
+  --launcher none \
+  2>&1 | tee "$LOGDIR/test.out"
+```
+### Fusion-Only Fine-Tuning (Frozen Encoders)
+
+Here we freeze camera & LiDAR encoders and only train BEV fusion layers + detection head:
 
 ```bash
-torchpack dist-run -np 8 python tools/train.py configs/nuscenes/seg/lidar-centerpoint-bev128.yaml
+EXPNAME=finetune_fusion_only
+RUN_ID=$(date +%Y%m%d_%H%M%S)
+LOGDIR=$LOGROOT/${EXPNAME}_${RUN_ID}
+mkdir -p "$LOGDIR"
+
+SAMPLES_PER_GPU=2
+WORKERS_PER_GPU=4
+
+CUDA_VISIBLE_DEVICES=0 \
+python tools/train.py $BASE_CONFIG \
+  --data.samples_per_gpu=$SAMPLES_PER_GPU \
+  --data.workers_per_gpu=$WORKERS_PER_GPU \
+  --freeze_encoders=True \
+  --optimizer.lr=1e-4 \
+  --runner.max_epochs=2 \
+  --model.encoders.camera.backbone.init_cfg.checkpoint=pretrained/swint-nuimages-pretrained.pth \
+  --load_from=pretrained/bevfusion-det.pth \
+  2>&1 | tee "$LOGDIR/train.out"
 ```
 
-For BEVFusion detection model, please run:
+Evaluate the resulting checkpoint with the same tools/test.py pattern as above.
+
+### Two-Stage LiDAR-First → Fusion
+
+Stage 1: LiDAR-Only Training
+
 ```bash
-torchpack dist-run -np 8 python tools/train.py configs/nuscenes/det/transfusion/secfpn/camera+lidar/swint_v0p075/convfuser.yaml --model.encoders.camera.backbone.init_cfg.checkpoint pretrained/swint-nuimages-pretrained.pth --load_from pretrained/lidar-only-det.pth 
+EXPNAME=twostage_lidar_only
+RUN_ID=$(date +%Y%m%d_%H%M%S)
+LOGDIR=$LOGROOT/${EXPNAME}_${RUN_ID}
+mkdir -p "$LOGDIR"
+
+LIDAR_SAMPLES_PER_GPU=4
+WORKERS_PER_GPU=4
+
+CUDA_VISIBLE_DEVICES=0 \
+python tools/train.py $LIDAR_CONFIG \
+  --data.samples_per_gpu=$LIDAR_SAMPLES_PER_GPU \
+  --data.workers_per_gpu=$WORKERS_PER_GPU \
+  --optimizer.lr=1e-4 \
+  --runner.max_epochs=2 \
+  2>&1 | tee "$LOGDIR/train.out"
 ```
 
-For BEVFusion segmentation model, please run:
+After this finishes, find the checkpoint (e.g. runs/run-XXXX/epoch_2.pth) and set:
+
 ```bash
-torchpack dist-run -np 8 python tools/train.py configs/nuscenes/seg/fusion-bev256d2-lss.yaml --model.encoders.camera.backbone.init_cfg.checkpoint pretrained/swint-nuimages-pretrained.pth
+LIDAR_CKPT=<path_to_lidar_epoch_2.pth>
 ```
 
-Note: please run `tools/test.py` separately after training to get the final evaluation metrics.
+Stage 2: Camera+LiDAR Fusion from LiDAR Checkpoint
 
-## Deployment on TensorRT
-[CUDA-BEVFusion](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/tree/master/CUDA-BEVFusion): Best practice for TensorRT, which provides INT8 acceleration solutions and achieves 25fps on ORIN.
+```bash
+EXPNAME=twostage_fusion_from_lidar
+RUN_ID=$(date +%Y%m%d_%H%M%S)
+LOGDIR=$LOGROOT/${EXPNAME}_${RUN_ID}
+mkdir -p "$LOGDIR"
 
-## FAQs
+SAMPLES_PER_GPU=2
+WORKERS_PER_GPU=4
 
-Q: Can we directly use the info files prepared by mmdetection3d?
+CUDA_VISIBLE_DEVICES=0 \
+python tools/train.py $BASE_CONFIG \
+  --data.samples_per_gpu=$SAMPLES_PER_GPU \
+  --data.workers_per_gpu=$WORKERS_PER_GPU \
+  --optimizer.lr=1e-4 \
+  --runner.max_epochs=2 \
+  --model.encoders.camera.backbone.init_cfg.checkpoint=pretrained/swint-nuimages-pretrained.pth \
+  --load_from=$LIDAR_CKPT \
+  2>&1 | tee "$LOGDIR/train.out"
+```
 
-A: We recommend re-generating the info files using this codebase since we forked mmdetection3d before their [coordinate system refactoring](https://github.com/open-mmlab/mmdetection3d/blob/master/docs/en/changelog.md).
+Then evaluate that checkpoint with tools/test.py as usual.
+
+## Reproducibility Notes
+
+To reproduce our experiments:
+
+1. Set up environment and build with python setup.py develop.
+
+2. Download nuScenes and generate info files via tools/create_data.py.
+
+3. Download pretrained weights into pretrained/.
+
+4. Run the desired training commands in (short schedules: 2 epochs).
+
+5. Run evaluation on the official BEVFusion checkpoint (baseline), and each fine-tuned checkpoint (full, fusion-only, two-stage).
+
+6. Inspect logs/<experiment>_<timestamp>/train.out and test.out for:
+
+   - Loss values and GPU memory (memory: field).
+
+   - Final evaluation metrics (bbox / nuScenes metrics) for comparison.
 
 ## Acknowledgements
 
-BEVFusion is based on [mmdetection3d](https://github.com/open-mmlab/mmdetection3d). It is also greatly inspired by the following outstanding contributions to the open-source community: [LSS](https://github.com/nv-tlabs/lift-splat-shoot), [BEVDet](https://github.com/HuangJunjie2017/BEVDet), [TransFusion](https://github.com/XuyangBai/TransFusion), [CenterPoint](https://github.com/tianweiy/CenterPoint), [MVP](https://github.com/tianweiy/MVP), [FUTR3D](https://arxiv.org/abs/2203.10642), [CVT](https://github.com/bradyz/cross_view_transformers) and [DETR3D](https://github.com/WangYueFt/detr3d). 
-
-Please also check out related papers in the camera-only 3D perception community such as [BEVDet4D](https://arxiv.org/abs/2203.17054), [BEVerse](https://arxiv.org/abs/2205.09743), [BEVFormer](https://arxiv.org/abs/2203.17270), [M2BEV](https://arxiv.org/abs/2204.05088), [PETR](https://arxiv.org/abs/2203.05625) and [PETRv2](https://arxiv.org/abs/2206.01256), which might be interesting future extensions to BEVFusion.
+This project is based on the [BEVFusion](https://github.com/mit-han-lab/bevfusion) implementation by the MIT Han Lab.
 
 
-## Citation
 
-If BEVFusion is useful or relevant to your research, please kindly recognize our contributions by citing our paper:
 
-```bibtex
-@inproceedings{liu2022bevfusion,
-  title={BEVFusion: Multi-Task Multi-Sensor Fusion with Unified Bird's-Eye View Representation},
-  author={Liu, Zhijian and Tang, Haotian and Amini, Alexander and Yang, Xingyu and Mao, Huizi and Rus, Daniela and Han, Song},
-  booktitle={IEEE International Conference on Robotics and Automation (ICRA)},
-  year={2023}
-}
-```
