@@ -1,0 +1,30 @@
+_base_: ['./convfuser.yaml']
+
+optimizer:
+  type: AdamW
+  lr: 0.0001
+
+lr_config:
+  policy: step
+  warmup: linear
+  warmup_iters: 200
+  warmup_ratio: 0.001
+  step: [2]
+
+total_epochs: 3
+
+model:
+  pts_bbox_head:
+    loss_cls:
+      class_weight: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 3.0, 1.5, 1.0]
+
+log_config:
+  interval: 10
+  hooks:
+    - type: TextLoggerHook
+
+data:
+  samples_per_gpu: 2
+  workers_per_gpu: 2
+
+load_from: pretrained/bevfusion-det.pth

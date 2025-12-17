@@ -1,0 +1,27 @@
+_base_:
+  - ./convfuser.yaml
+
+model:
+  pts_bbox_head:
+    loss_cls:
+      class_weight:
+        - 1.0
+        - 1.0
+        - 1.0
+        - 1.0
+        - 1.0
+        - 1.0
+        - 2.0
+        - 3.0
+        - 1.5
+        - 1.0
+
+lr_config:
+  policy: step
+  warmup: linear
+  warmup_iters: 500
+  warmup_ratio: 0.001
+  step:
+    - 3
+    - 4
+

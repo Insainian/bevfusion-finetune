@@ -100,7 +100,7 @@ if __name__ == "__main__":
         train_version = f"{args.version}-trainval"
         nuscenes_data_prep(
             root_path=args.root_path,
-            info_prefix=args.extra_tag,
+            info_prefix='nuscenes',
             version=train_version,
             dataset_name="NuScenesDataset",
             out_dir=args.out_dir,
@@ -110,7 +110,7 @@ if __name__ == "__main__":
         test_version = f"{args.version}-test"
         nuscenes_data_prep(
             root_path=args.root_path,
-            info_prefix=args.extra_tag,
+            info_prefix='nuscenes',
             version=test_version,
             dataset_name="NuScenesDataset",
             out_dir=args.out_dir,
@@ -121,7 +121,7 @@ if __name__ == "__main__":
         train_version = f"{args.version}"
         nuscenes_data_prep(
             root_path=args.root_path,
-            info_prefix=args.extra_tag,
+            info_prefix='nuscenes',
             version=train_version,
             dataset_name="NuScenesDataset",
             out_dir=args.out_dir,

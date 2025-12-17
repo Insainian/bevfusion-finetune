@@ -1,5 +1,5 @@
 dataset_type: NuScenesDataset
-dataset_root: data/nuscenes/
+dataset_root: "/fs/atipa/home/015098772/github/bevfusion-finetune/data/nuscenes/"
 gt_paste_stop_epoch: -1
 reduce_beams: 32
 load_dim: 5
